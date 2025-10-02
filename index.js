@@ -17,7 +17,7 @@ const Schema = mongoose.Schema;
 
 // Connection to MongoDB databse
 mongoose.set('strictQuery', false);
-mongoose.connect(process.env.DATABASE_URL).then(() => {
+mongoose.connect(DATABASE_URL='mongodb+srv://royce:twoGwdyf7@cluster0.w8dipua.mongodb.net/sample_mflix?retryWrites=true&w=majority').then(() => {
   console.log("MongoDB Connection Successful");
 }).catch((err) => {
   console.log(err);
