@@ -1,157 +1,244 @@
-const express = require('express')
-const app = express()
-const cors = require('cors')
-require('dotenv').config()
+const express = require('express');
+const app = express();
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const shortid = require('shortid');
 
-app.use(cors())
-app.use(express.static('public'))
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/views/index.html')
+require('dotenv').config();
+
+//* Middleware
+
+app.use(cors());
+app.use(express.static('public'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+
+//* MongoDB
+
+mongoose.connect(MONGO_URI='mongodb+srv://royce:twoGwdyf7@cluster0.w8dipua.mongodb.net/fcc?retryWrites=true&w=majority', {
+	useNewUrlParser: true,
+	useUnifiedTopology: true,
 });
 
-// --------------CHALLENGE--------------
-// First step is to create a free MongoDB project and get your Cluster API key
-// Create a .env file in root directory and declare a new variable called "DATABASE_URL" and initialize it with your Project key
-const mongoose = require("mongoose");
-const Schema = mongoose.Schema;
+//* Schemas
 
-// Connection to MongoDB databse
-mongoose.set('strictQuery', false);
-mongoose.connect(DATABASE_URL='mongodb+srv://royce:twoGwdyf7@cluster0.w8dipua.mongodb.net/sample_mflix?retryWrites=true&w=majority').then(() => {
-  console.log("MongoDB Connection Successful");
-}).catch((err) => {
-  console.log(err);
+const exerciseSchema = new mongoose.Schema({
+	userId: String,
+	username: String,
+	description: { type: String, required: true },
+	duration: { type: Number, required: true },
+	date: String,
 });
 
-// Created User and Exercise schema in "models" folder -> User.js, Exercise.js
-// Import both User and Exercise schema
-const User = require("./models/User");
-const Exercise = require("./models/Exercise");
-
-// urlencoded is a middleware and the main objective of this method is to parse the incoming request with urlencoded payloads and is based upon the body-parser.
-app.use(express.urlencoded({
-  limit: '10mb',
-  extended: true
-}));
-
-// Create New User API endpoint
-app.post("/api/users", async (req, res) => {
-  try {
-    const userName = req.body.username;
-
-    // Check if "userName" already exists in User database
-    const userObj = await User.findOne({ username: userName });
-    if (userObj) return res.json({ error: "User with the given username already exists" });
-
-    // Create a new User in database
-    const user = await new User({
-      username: userName,
-    }).save();
-
-    res.json(user);
-  }
-  catch (error) {
-    return res.json({ error: error.message });
-  }
+const userSchema = new mongoose.Schema({
+	username: String,
 });
 
-// Get User ID API endpoint
-app.post("/api/userID", async (req, res) => {
-  try {
-    const userName = req.body.username;
+//* Models
 
-    // Check if "userName" already exists in User database
-    const userObj = await User.findOne({ username: userName });
-    if (userObj) return res.json(userObj);
-    res.json({ error: `No ID found for ${userName}` })
-  }
-  catch (error) {
-    return res.json({ error: error.message });
-  }
+let User = mongoose.model('User', userSchema);
+
+let Exercise = mongoose.model('Exercise', exerciseSchema);
+
+//* Endpoints
+
+/*
+ * GET
+ * Delete all users
+ */
+app.get('/api/users/delete', function (_req, res) {
+	console.log('### delete all users ###'.toLocaleUpperCase());
+
+	User.deleteMany({}, function (err, result) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Deleting all users failed!',
+			});
+		}
+
+		res.json({ message: 'All users have been deleted!', result: result });
+	});
 });
 
-// Get all users
-app.get("/api/users", async (req, res) => {
-  try {
-    const user = await User.find().select("-__v");
-    res.json(user);
-  }
-  catch (error) {
-    return res.json({ error: error.message });
-  }
+/*
+ * GET
+ * Delete all exercises
+ */
+app.get('/api/exercises/delete', function (_req, res) {
+	console.log('### delete all exercises ###'.toLocaleUpperCase());
+
+	Exercise.deleteMany({}, function (err, result) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Deleting all exercises failed!',
+			});
+		}
+
+		res.json({ message: 'All exercises have been deleted!', result: result });
+	});
 });
 
-// Create User's exercise in database
-app.post("/api/users/:_id/exercises", async (req, res) => {
-  try {
-    const id = req.params._id;
-
-    // Check if "userName" already exists in User database
-    const user = await User.findById(id);
-    if (!user) return res.json({ error: "User of the given 'id' doesn't exists" });
-
-    const { description, duration, date } = req.body;
-
-    if (!description) return res.json({ error: "Please provide Exercise description to proceed" });
-    if (!duration) return res.json({ error: "Please provide Exercise duration to proceed" });
-
-    const exercise = await new Exercise({
-      user_id: user._id,
-      description: description,
-      duration: duration,
-      date: date ? new Date(date) : new Date(),
-    }).save();
-
-    res.json({
-      _id: user.id,
-      username: user.username,
-      description: exercise.description,
-      duration: exercise.duration,
-      date: new Date(exercise.date).toDateString(),
-    });
-  }
-  catch (error) {
-    return res.json({ error: "Error adding Exercise... Try agian after some time" });
-    // {"error":"Cast to ObjectId failed for value \"a\" (type string) at path \"_id\" for model \"User\""} <-- When wrong user id passed
-  }
+app.get('/', async (_req, res) => {
+	res.sendFile(__dirname + '/views/index.html');
+	await User.syncIndexes();
+	await Exercise.syncIndexes();
 });
 
-// Get User's exercise log
-app.get("/api/users/:_id/logs", async (req, res) => {
-  const id = req.params._id;
-  const { from, to, limit } = req.query;
+/*
+ * GET
+ * Get all users
+ */
+app.get('/api/users', function (_req, res) {
+	console.log('### get all users ###'.toLocaleUpperCase());
 
-  const user = await User.findById(id);
-  if (!user) return res.json({ error: "User of the given 'id' doesn't exists" });
+	User.find({}, function (err, users) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Getting all users failed!',
+			});
+		}
 
-  let dateObj = {};
-  if (from) {
-    dateObj["$gte"] = new Date(from); // gte -> grater than or equals to
-  }
-  if (to) {
-    dateObj["$lte"] = new Date(to); // lte -> less than or equals to
-  }
-  let filter = {
-    user_id: id,
-  }
-  if (from || to) filter.date = dateObj;
+		if (users.length === 0) {
+			res.json({ message: 'There are no users in the database!' });
+		}
 
-  const exercise = await Exercise.find({ user_id: id }).limit(+limit ?? 500);
-  if (!exercise) return res.json({ error: "No exercise exists for the given 'id'" });
-  const log = exercise.map((e) => ({
-    description: e.description,
-    duration: e.duration,
-    date: e.date.toDateString(),
-  }))
+		console.log('users in database: '.toLocaleUpperCase() + users.length);
 
-  res.json({
-    username: user.username,
-    count: exercise.length,
-    _id: exercise.user_id,
-    log
-  });
-})
+		res.json(users);
+	});
+});
 
-const listener = app.listen(process.env.PORT || 3004, () => {
-  console.log('Your app is listening on port ' + listener.address().port)
-})
+/*
+ * POST
+ * Create a new user
+ */
+app.post('/api/users', function (req, res) {
+	const inputUsername = req.body.username;
+
+	console.log('### create a new user ###'.toLocaleUpperCase());
+
+	//? Create a new user
+	let newUser = new User({ username: inputUsername });
+
+	console.log(
+		'creating a new user with username - '.toLocaleUpperCase() + inputUsername
+	);
+
+	newUser.save((err, user) => {
+		if (err) {
+			console.error(err);
+			res.json({ message: 'User creation failed!' });
+		}
+
+		res.json({ username: user.username, _id: user._id });
+	});
+});
+
+/*
+ * POST
+ * Add a new exercise
+ * @param _id
+ */
+app.post('/api/users/:_id/exercises', function (req, res) {
+	var userId = req.params._id;
+	var description = req.body.description;
+	var duration = req.body.duration;
+	var date = req.body.date;
+
+	console.log('### add a new exercise ###'.toLocaleUpperCase());
+
+	//? Check for date
+	if (!date) {
+		date = new Date().toISOString().substring(0, 10);
+	}
+
+	console.log(
+		'looking for user with id ['.toLocaleUpperCase() + userId + '] ...'
+	);
+
+	//? Find the user
+	User.findById(userId, (err, userInDb) => {
+		if (err) {
+			console.error(err);
+			res.json({ message: 'There are no users with that ID in the database!' });
+		}
+
+		//* Create new exercise
+		let newExercise = new Exercise({
+			userId: userInDb._id,
+			username: userInDb.username,
+			description: description,
+			duration: parseInt(duration),
+			date: date,
+		});
+
+		newExercise.save((err, exercise) => {
+			if (err) {
+				console.error(err);
+				res.json({ message: 'Exercise creation failed!' });
+			}
+
+			res.json({
+				username: userInDb.username,
+				description: exercise.description,
+				duration: exercise.duration,
+				date: new Date(exercise.date).toDateString(),
+				_id: userInDb._id,
+			});
+		});
+	});
+});
+
+/*
+ * GET
+ * Get a user's exercise log
+ * @param _id
+ */
+app.get('/api/users/:_id/logs', async function (req, res) {
+	const userId = req.params._id;
+	const from = req.query.from || new Date(0).toISOString().substring(0, 10);
+	const to =
+		req.query.to || new Date(Date.now()).toISOString().substring(0, 10);
+	const limit = Number(req.query.limit) || 0;
+
+	console.log('### get the log from a user ###'.toLocaleUpperCase());
+
+	//? Find the user
+	let user = await User.findById(userId).exec();
+
+	console.log(
+		'looking for exercises with id ['.toLocaleUpperCase() + userId + '] ...'
+	);
+
+	//? Find the exercises
+	let exercises = await Exercise.find({
+		userId: userId,
+		date: { $gte: from, $lte: to },
+	})
+		.select('description duration date')
+		.limit(limit)
+		.exec();
+
+	let parsedDatesLog = exercises.map((exercise) => {
+		return {
+			description: exercise.description,
+			duration: exercise.duration,
+			date: new Date(exercise.date).toDateString(),
+		};
+	});
+
+	res.json({
+		_id: user._id,
+		username: user.username,
+		count: parsedDatesLog.length,
+		log: parsedDatesLog,
+	});
+});
+
+const listener = app.listen(process.env.PORT || 3000, () => {
+	console.log('Your app is listening on port ' + listener.address().port);
+});
