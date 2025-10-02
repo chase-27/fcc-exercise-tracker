@@ -9,9 +9,13 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
 
+// --------------CHALLENGE--------------
+// First step is to create a free MongoDB project and get your Cluster API key
+// Create a .env file in root directory and declare a new variable called "DATABASE_URL" and initialize it with your Project key
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
+// Connection to MongoDB databse
 mongoose.set('strictQuery', false);
 mongoose.connect(process.env.DATABASE_URL).then(() => {
   console.log("MongoDB Connection Successful");
@@ -19,21 +23,27 @@ mongoose.connect(process.env.DATABASE_URL).then(() => {
   console.log(err);
 });
 
+// Created User and Exercise schema in "models" folder -> User.js, Exercise.js
+// Import both User and Exercise schema
 const User = require("./models/User");
 const Exercise = require("./models/Exercise");
 
+// urlencoded is a middleware and the main objective of this method is to parse the incoming request with urlencoded payloads and is based upon the body-parser.
 app.use(express.urlencoded({
   limit: '10mb',
   extended: true
 }));
 
+// Create New User API endpoint
 app.post("/api/users", async (req, res) => {
   try {
     const userName = req.body.username;
 
+    // Check if "userName" already exists in User database
     const userObj = await User.findOne({ username: userName });
     if (userObj) return res.json({ error: "User with the given username already exists" });
 
+    // Create a new User in database
     const user = await new User({
       username: userName,
     }).save();
@@ -45,10 +55,12 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
+// Get User ID API endpoint
 app.post("/api/userID", async (req, res) => {
   try {
     const userName = req.body.username;
 
+    // Check if "userName" already exists in User database
     const userObj = await User.findOne({ username: userName });
     if (userObj) return res.json(userObj);
     res.json({ error: `No ID found for ${userName}` })
@@ -58,6 +70,7 @@ app.post("/api/userID", async (req, res) => {
   }
 });
 
+// Get all users
 app.get("/api/users", async (req, res) => {
   try {
     const user = await User.find().select("-__v");
@@ -68,10 +81,12 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
+// Create User's exercise in database
 app.post("/api/users/:_id/exercises", async (req, res) => {
   try {
     const id = req.params._id;
 
+    // Check if "userName" already exists in User database
     const user = await User.findById(id);
     if (!user) return res.json({ error: "User of the given 'id' doesn't exists" });
 
@@ -97,9 +112,11 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
   }
   catch (error) {
     return res.json({ error: "Error adding Exercise... Try agian after some time" });
+    // {"error":"Cast to ObjectId failed for value \"a\" (type string) at path \"_id\" for model \"User\""} <-- When wrong user id passed
   }
 });
 
+// Get User's exercise log
 app.get("/api/users/:_id/logs", async (req, res) => {
   const id = req.params._id;
   const { from, to, limit } = req.query;
@@ -109,10 +126,10 @@ app.get("/api/users/:_id/logs", async (req, res) => {
 
   let dateObj = {};
   if (from) {
-    dateObj["$gte"] = new Date(from);
+    dateObj["$gte"] = new Date(from); // gte -> grater than or equals to
   }
   if (to) {
-    dateObj["$lte"] = new Date(to);
+    dateObj["$lte"] = new Date(to); // lte -> less than or equals to
   }
   let filter = {
     user_id: id,
